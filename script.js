@@ -30,6 +30,13 @@ let currentQuestionIndex = 0;
 let speechRunId = 0;
 let qrCodeCreated = false;
 
+function supportsSpeech() {
+  return (
+    "speechSynthesis" in window &&
+    typeof window.SpeechSynthesisUtterance !== "undefined"
+  );
+}
+
 function stopSpeech(showMessage = true) {
   speechRunId += 1;
 
@@ -62,23 +69,18 @@ async function speakQuestion(prompt, runId) {
 
 function speakText(text, runId) {
   return new Promise((resolve) => {
-    if (runId !== speechRunId) {
+    if (runId !== speechRunId || !supportsSpeech()) {
       resolve();
       return;
     }
 
-    const utterance = new SpeechSynthesisUtterance(text);
+    const utterance = new window.SpeechSynthesisUtterance(text);
     utterance.lang = "en-US";
     utterance.rate = 0.85;
 
     utterance.onend = resolve;
     utterance.onerror = resolve;
-
-    if ("speechSynthesis" in window) {
-      window.speechSynthesis.speak(utterance);
-    } else {
-      resolve();
-    }
+    window.speechSynthesis.speak(utterance);
   });
 }
 
@@ -150,7 +152,7 @@ function loadQuizzes(data) {
 }
 
 document.getElementById("speak-question").addEventListener("click", async () => {
-  if (!("speechSynthesis" in window)) {
+  if (!supportsSpeech()) {
     speechStatus.textContent = "Speech is not available in this browser.";
     return;
   }
@@ -168,7 +170,7 @@ document.getElementById("speak-question").addEventListener("click", async () => 
 });
 
 document.getElementById("speak-options").addEventListener("click", async () => {
-  if (!("speechSynthesis" in window)) {
+  if (!supportsSpeech()) {
     speechStatus.textContent = "Speech is not available in this browser.";
     return;
   }
@@ -198,7 +200,7 @@ document.getElementById("speak-options").addEventListener("click", async () => {
 });
 
 readSelectedTextButton.addEventListener("click", async () => {
-  if (!("speechSynthesis" in window)) {
+  if (!supportsSpeech()) {
     speechStatus.textContent = "Speech is not available in this browser.";
     return;
   }
@@ -230,14 +232,22 @@ quizSelect.addEventListener("change", () => {
   if (selectedQuiz) displayQuiz(selectedQuiz);
 });
 
-answerForm.addEventListener("submit", (event) => {
+answerForm.addEventListener("submit", async (event) => {
   event.preventDefault();
 
+  // Stop any question/options speech before speaking the answer feedback.
+  stopSpeech(false);
+  const runId = speechRunId;
   const selectedAnswer = answerForm.querySelector('input[name="answer"]:checked');
 
   if (!selectedAnswer) {
-    answerFeedback.textContent = "Select an answer before checking.";
+    const message = "Select an answer before checking.";
+    answerFeedback.textContent = message;
     answerFeedback.className = "feedback incorrect";
+    speechStatus.textContent = supportsSpeech()
+      ? "Reading answer feedback."
+      : "Speech is not available in this browser.";
+    await speakText(message, runId);
     return;
   }
 
@@ -245,12 +255,33 @@ answerForm.addEventListener("submit", (event) => {
   const selectedIndex = Number(selectedAnswer.value);
 
   if (selectedIndex === question.answerIndex) {
-    answerFeedback.textContent = "Correct!";
+    const correctAnswer = question.options[question.answerIndex];
+    const completedSentence = String(question.prompt)
+      .replace(/_+/g, correctAnswer)
+      .replace(/\s+([,.!?;:])/g, "$1")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+    const spokenFeedback = `Correct. ${completedSentence}`;
+
+    answerFeedback.textContent = `Correct! ${completedSentence}`;
     answerFeedback.className = "feedback correct";
+    speechStatus.textContent = supportsSpeech()
+      ? "Correct. Reading the completed sentence."
+      : "Speech is not available in this browser.";
+    await speakText(spokenFeedback, runId);
   } else {
-    const correctOption = question.options[question.answerIndex];
-    answerFeedback.textContent = `Not quite. The correct answer is: ${correctOption}.`;
+    const message = "Wrong, try again.";
+
+    answerFeedback.textContent = message;
     answerFeedback.className = "feedback incorrect";
+    speechStatus.textContent = supportsSpeech()
+      ? "Reading answer feedback."
+      : "Speech is not available in this browser.";
+    await speakText(message, runId);
+  }
+
+  if (runId === speechRunId && supportsSpeech()) {
+    speechStatus.textContent = "Finished reading answer feedback.";
   }
 });
 
