@@ -2,6 +2,7 @@
 
 const DATA_FILE = "quiz-data.json";
 const OPTION_PAUSE_MS = 1400;
+const BLANK_PAUSE_MS = 400;
 
 const quizSelect = document.getElementById("quiz-select");
 const quizTitle = document.getElementById("quiz-title");
@@ -39,8 +40,24 @@ function stopSpeech(showMessage = true) {
   speechStatus.textContent = showMessage ? "Speech stopped." : "";
 }
 
-function getSpokenQuestion(prompt) {
-  return String(prompt).replace(/_+/g, " blank ").replace(/\s+/g, " ").trim();
+async function speakQuestion(prompt, runId) {
+  const parts = String(prompt).split(/(_+)/);
+
+  for (const part of parts) {
+    if (runId !== speechRunId) return;
+
+    if (/^_+$/.test(part)) {
+      await delay(BLANK_PAUSE_MS);
+      if (runId !== speechRunId) return;
+
+      await speakText("blank", runId);
+      if (runId !== speechRunId) return;
+
+      await delay(BLANK_PAUSE_MS);
+    } else if (part.trim()) {
+      await speakText(part, runId);
+    }
+  }
 }
 
 function speakText(text, runId) {
@@ -143,7 +160,7 @@ document.getElementById("speak-question").addEventListener("click", async () => 
   const question = currentQuiz.questions[currentQuestionIndex];
   speechStatus.textContent = "Reading the question.";
 
-  await speakText(getSpokenQuestion(question.prompt), runId);
+  await speakQuestion(question.prompt, runId);
 
   if (runId === speechRunId) {
     speechStatus.textContent = "Finished reading the question.";
