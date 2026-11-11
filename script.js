@@ -235,7 +235,6 @@ quizSelect.addEventListener("change", () => {
 answerForm.addEventListener("submit", async (event) => {
   event.preventDefault();
 
-  // Stop any question/options speech before speaking the answer feedback.
   stopSpeech(false);
   const runId = speechRunId;
   const selectedAnswer = answerForm.querySelector('input[name="answer"]:checked');
@@ -271,7 +270,6 @@ answerForm.addEventListener("submit", async (event) => {
     await speakText(spokenFeedback, runId);
   } else {
     const message = "Wrong, try again.";
-
     answerFeedback.textContent = message;
     answerFeedback.className = "feedback incorrect";
     speechStatus.textContent = supportsSpeech()
